@@ -1,0 +1,24 @@
+{
+    "name": "s25/dom-trawler",
+    "description": "Yet another DOM crawler, inspired by symfony/dom-crawler",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Konstantin Krylov",
+            "email": "crylove_const@mail.ru"
+        }
+    ],
+    "require": {
+        "php": "^7.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^6"
+    },
+    "autoload": {
+        "psr-4": {"S25\\DomTrawler\\": "src/"}
+    },
+    "scripts": {
+        "test": "./vendor/bin/phpunit --bootstrap vendor/autoload.php test/DomTrawlerTest.php"
+    }
+}
