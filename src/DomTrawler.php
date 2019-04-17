@@ -22,6 +22,7 @@ namespace S25\DomTrawler
     {
       $nodeList = [$document];
       $xpath = new \DOMXpath($document);
+      XPath::setUp($xpath);
       return new self($xpath, $nodeList, true);
     }
 

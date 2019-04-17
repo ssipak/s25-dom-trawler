@@ -4,6 +4,16 @@ namespace S25\DomTrawler
 {
   abstract class XPath
   {
+    public static function setUp(\DOMXPath $xpath)
+    {
+      $xpath->registerNamespace("php", "http://php.net/xpath");
+      $xpath->registerPhpFunctions([
+        self::class.'::funcSameLocalNameCount',
+        self::class.'::funcSameLocalNameExists',
+        self::class.'::funcNthOfType'
+      ]);
+    }
+
     /**
      * @param string $selector
      * @return string
@@ -28,21 +38,23 @@ namespace S25\DomTrawler
           ||
           self::parseAttribute($selector, $query)
           ||
+          self::parsePseudoClass($selector, $query)
+          ||
           self::parseComma($selector, $query, $alters)
           ||
-          self::parsePlus($selector, $query)
+          self::parseAdjacentSibling($selector, $query)
           ||
-          self::parseTilda($selector, $query)
+          self::parseGeneralSibling($selector, $query)
           ||
-          self::parseChildren($selector, $query)
+          self::parseChild($selector, $query)
           ||
-          self::parseDescendants($selector, $query)
+          self::parseDescendant($selector, $query)
         )
         {
           continue;
         }
 
-        throw new \Exception("Unsupported selector: «%s»", mb_substr($selector, 15, null, 'utf-8'));
+        throw new \Exception(sprintf("Unsupported selector: «%s»", mb_substr($selector, 0, 30, 'utf-8')));
       }
       $alters[] = $query;
 
@@ -52,6 +64,8 @@ namespace S25\DomTrawler
 
       return $query;
     }
+
+    // region Parsers
 
     private static function parseTag(string &$selector, array &$query): bool
     {
@@ -110,48 +124,180 @@ namespace S25\DomTrawler
        *   and whose value contains at least one occurrence of string "value" as substring.
        * [attr operator value i]
        */
-      $attrPcre = <<<PCRE
-/^\[
-  \s*( [\w-]+ )\s* # name
+      $pcre = <<<PCRE
+/^(?J) \[\s*
+  (?<name>[\w-]+)
+  \s*
   (?:
-    ([~|^$*]?=)    # operator
-    "([^"]*)"      # value
+    (?<operator>[~|^$*]?=)
+    \s*
+    (?: "(?<value>[^"]*)" | '(?<value>[^']*)' | (?<value>\w+) )
+    (?<ignore_case>\s* i)?
   )?
-\]/xui
+\s*\] /xui
 PCRE;
-      if (preg_match($attrPcre, $selector, $match) !== 1)
+      if (preg_match($pcre, $selector, $match) !== 1)
       {
         return false;
       }
 
-      $attrName     = $match[1];
-      $attrOperator = $match[2] ?? null;
-      $attrValue    = $match[3] ?? null;
+      $name       = '@'.$match['name'];
+      $operator   = $match['operator'] ?? 'none';
+      $value      = $match['value'] ?? null;
+      $ignoreCase = boolval($match['ignore_case'] ?? false);
 
-      $component = 'self::*';
-      if ($attrOperator === null)
+      if ($ignoreCase)
       {
-        $component .= "[@$attrName]";
-      }
-      else
-      {
-        switch ($attrOperator)
+        $transTable = self::extractCaseSensitiveChars($value);
+
+        if ($transTable)
         {
-          case '=':
-            $component .= "[@$attrName='$attrValue']";
-            break;
-          case '^=':
-            $component .= "[starts-with(@$attrName, '$attrValue')]";
-            break;
-          case '$=':
-            $component .= "[substring(@$attrName, string-length(@$attrName) - string-length('$attrValue') + 1) = '$attrValue']";
-            break;
-          default:
-            throw new \Exception("Unsupported attribute operator: «%s»", mb_substr($selector, 15, null, 'utf-8'));
+          $name = sprintf(
+            'translate(%s,"%s","%s")',
+            $name, join(array_keys($transTable)), join(array_values($transTable))
+          );
+          $value = mb_strtolower($value, 'utf8');
         }
       }
+
+      if (is_string($value))
+      {
+        $value = self::escapeString($value);
+      }
+
+      $component = 'self::*';
+
+      switch ($operator)
+      {
+        case 'none':  $component .= "[$name]"; break;
+        case '=':     $component .= "[$name=$value]"; break;
+        case '^=':    $component .= "[starts-with($name, $value)]";break;
+        case '$=':    $component .= "[substring($name, string-length($name) - string-length($value) + 1) = $value]"; break;
+        case '*=':    $component .= "[contains($name, $value)]"; break;
+        default:
+          throw new \Exception(sprintf("Unsupported attribute operator: «%s»", mb_substr($selector, 0, 30, 'utf-8')));
+      }
+
       $query[] = $component;
       $selector = self::cutOff($selector, $match[0]);
+      return true;
+    }
+
+    private static function parsePseudoClass(string &$selector, array &$query): bool
+    {
+      if (preg_match('/^:([\w-]+)/', $selector, $match) !== 1)
+      {
+        return false;
+      }
+
+      if (
+        self::parseFirstLastOnly($selector, $query)
+        ||
+        self::parseNthChild($selector, $query)
+      )
+      {
+        return true;
+      }
+
+      throw new \Exception(sprintf("Unsupported pseudo-class: «%s»", mb_substr($selector, 0, 30, 'utf-8')));
+    }
+
+    private static function parseFirstLastOnly(string &$selector, array &$query)
+    {
+      // Первый, последний или единственный "отпрыск"
+      if (preg_match('/^:(first|last|only)-(child|of-type)/ui', $selector, $match) !== 1)
+      {
+        return false;
+      }
+
+      list(,$side, $mode) = $match;
+      $first  = $side === 'first' || $side === 'only' ? 'preceding-sibling::*' : '';
+      $last   = $side === 'last'  || $side === 'only' ? 'following-sibling::*' : '';
+      if ($mode === 'of-type')
+      {
+        $first  = $first ? sprintf("php:function('%s::funcSameLocalNameExists', self::*, $first)", self::class) : '';
+        $last   = $last  ? sprintf("php:function('%s::funcSameLocalNameExists', self::*, $last)",  self::class) : '';
+      }
+      $first  = $first ? "[not($first)]" : '';
+      $last   = $last  ? "[not($last)]"  : '';
+
+      $query[] = "self::*$first$last";
+      $selector = self::cutOff($selector, $match[0]);
+      return true;
+    }
+
+    private static function parseNthChild(string &$selector, array &$query)
+    {
+      $pcre = <<<PCRE
+/^ (?J)
+    :nth(?<side>-last)?-(?<mode>child|of-type)
+    \(\s*(
+      (?<word>even|odd)
+      |
+      (?<a>[+-]?\d*)n
+      |
+      (?<b>[+-]?\d+)
+      |
+      (?<a>[+-]?\d*)n \s* (?<s>[+-]) \s* (?<b>\d+)
+    )\s*\)
+/xui
+PCRE;
+      if (preg_match($pcre, $selector, $match) !== 1)
+      {
+        return false;
+      }
+
+      // Далее функция всегда возвращает true, заранее удаляем из селектора обработанную часть строки
+      $selector = self::cutOff($selector, $match[0]);
+
+      switch ($match['word'] ?? 'an_b')
+      {
+        case 'odd':   list ($a, $b) = [2, 1]; break;
+        case 'even':  list ($a, $b) = [2, 0]; break;
+        default:
+          $a = intval($match['a']);
+          $b = intval(($match['s'] ?? '') . ($match['b'] ?? ''));
+          break;
+      }
+
+        $axis = ($match['side'] ?? '') !== '-last' ? 'preceding-sibling' : 'following-sibling';
+
+      if ($match['mode'] === 'of-type')
+      {
+        $query[] = sprintf("self::*[php:function('%s::nthOfType', self::*, $axis::*, $a, $b)]", self::class);
+        return true;
+      }
+
+      if ($a === 0)
+      {
+        $b = strval($b - 1);
+        $query[] = "self::*[count($axis::*) = $b]";
+        return true;
+      }
+
+      // (x-c) / n >= 0 and (x-c) % n == 0
+
+      //    (x-c) % n == 0
+      //  and
+      //      n > 0 and x >= c
+      //    or
+      //      n < 0 and x <= c
+
+      if ($b === 0)
+      {
+        $query[] = $a < 0
+          ? 'self::*[false()]' // Селектор -Xn+0, где X = 1,2.. не выбирает ничего;
+          : "self::*[(count($axis::*)+1) mod $a = 0]";
+        return true;
+      }
+
+      $minusC = -$b + 1;
+      $minusC = strval($minusC > 0 ? '+' . $minusC : ($minusC === 0 ? '' : $minusC));
+
+      $component = "self::*[(count($axis::*){$minusC}) mod $a = 0]";
+      $component .= $a > 0 ? "[(count($axis::*){$minusC}) >= 0]" : "[(count($axis::*){$minusC}) <= 0]";
+
+      $query[] = $component;
       return true;
     }
 
@@ -168,7 +314,7 @@ PCRE;
       return true;
     }
 
-    private static function parsePlus(string &$selector, array &$query): bool
+    private static function parseAdjacentSibling(string &$selector, array &$query): bool
     {
       // * + * Первый следующий элемент
       if (preg_match('/^\s*[+]\s*/ui', $selector, $match) !== 1)
@@ -181,7 +327,7 @@ PCRE;
       return true;
     }
 
-    private static function parseTilda(string &$selector, array &$query): bool
+    private static function parseGeneralSibling(string &$selector, array &$query): bool
     {
       // * ~ * Поледующие элементы с общим родителем
       if (preg_match('/^\s*[~]\s*/ui', $selector, $match) !== 1)
@@ -194,7 +340,7 @@ PCRE;
       return true;
     }
 
-    private static function parseChildren(string &$selector, array &$query): bool
+    private static function parseChild(string &$selector, array &$query): bool
     {
       // * > * Дочерние элементы
       if (preg_match('/^\s*[>]\s*/ui', $selector, $match) !== 1)
@@ -206,7 +352,7 @@ PCRE;
       return true;
     }
 
-    private static function parseDescendants(string &$selector, array &$query): bool
+    private static function parseDescendant(string &$selector, array &$query): bool
     {
       // * * или * >> * Потомоки
       if (preg_match('/^(\s+|\s*[>][>]\s*)/ui', $selector, $match) !== 1)
@@ -218,9 +364,155 @@ PCRE;
       return true;
     }
 
+    // endregion Parsers
+
+    // region Registered functions
+
+    /**
+     * @param \DOMNode[] $contextNodes
+     * @param \DOMNode[] $nodes
+     * @return int
+     */
+    public static function funcSameLocalNameCount(array $contextNodes, array $nodes): int
+    {
+      if (count($contextNodes) !== 1)
+      {
+        return false;
+      }
+      $localName = $contextNodes[0]->localName;
+      $count = 0;
+      foreach($nodes as $node)
+      {
+        if ($node->localName === $localName)
+        {
+          $count++;
+        }
+      }
+      return $count;
+    }
+
+    /**
+     * @param \DOMNode[] $contextNodes
+     * @param \DOMNode[] $nodes
+     * @return bool
+     */
+    public static function funcSameLocalNameExists(array $contextNodes, array $nodes): bool
+    {
+      if (count($contextNodes) !== 1)
+      {
+        return false;
+      }
+      $localName = $contextNodes[0]->localName;
+
+      foreach($nodes as $node)
+      {
+        if ($node->localName === $localName)
+        {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    /**
+     * @param \DOMNode[] $contextNodes
+     * @param \DOMNode[] $nodes
+     * @param mixed $n
+     * @param mixed $c
+     * @return bool
+     */
+    public static function funcNthOfType(array $contextNodes, array $nodes, $n, $c): bool
+    {
+      $index = self::sameLocalNameCount($contextNodes, $nodes) + 1;
+      $n = intval($n);
+      $c = intval($c);
+      $diff = $index - $c;
+      return $diff / $n >= 0 && $diff % $n === 0;
+    }
+
+    // endregion Registered functions
+
     private static function cutOff(string $string, string $pattern): string
     {
       return mb_substr($string, mb_strlen($pattern, 'utf-8'), null, 'utf-8');
+    }
+
+    /**
+     * Выбирает чувствительные к регистру символы и возвращает ассоциативный массив,
+     * где ключ - символ в верхнем регистре, значение - символ в нижнем регистре.
+     *
+     * @param $string
+     * @return array
+     */
+    private static function extractCaseSensitiveChars(string $string): array
+    {
+      if (strlen($string) === 0)
+      {
+        return [];
+      }
+
+      $table = array_filter(
+        array_combine(
+          preg_split('/(?<!^)(?!$)/u', mb_strtoupper($string, 'utf8')),
+          preg_split('/(?<!^)(?!$)/u', mb_strtolower($string, 'utf8'))
+        ),
+        function($char, $lowerChar) {
+          return $char !== strval($lowerChar);
+        },
+        ARRAY_FILTER_USE_BOTH
+      );
+
+      return $table;
+    }
+
+    /**
+     * Экранирует символы ' и " в строке
+     * В XPath 1.0 есть только один способ экранировать строки содержащие оба символа - через функцию concat()
+     * @param $string
+     * @return string
+     */
+    private static function escapeString(string $string): string
+    {
+      $pieces = preg_split('/([\'"])/u', $string, -1, PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY);
+
+      $quote = null;
+      $buffer = '';
+      $bufferArray = [];
+
+      foreach ($pieces as $piece)
+      {
+        if ($piece === '"' || $piece === "'")
+        {
+          if ($quote === null || $quote === $piece)
+          {
+            $quote = $piece;
+            $buffer .= $piece;
+          }
+          else
+          {
+            $bufferArray[] = $piece . $buffer . $piece;
+            $buffer = $piece;
+            $quote = $piece;
+          }
+        }
+        else
+        {
+          $buffer .= $piece;
+        }
+      }
+
+      if (strlen($buffer))
+      {
+        $quote = $quote ?? '"';
+        $opposite = $quote === '"' ? "'" : '"';
+        $bufferArray[] = $opposite . $buffer . $opposite;
+      }
+      else
+      {
+        return "''";
+      }
+
+      return count($bufferArray) > 1 ? 'concat('.implode(',', $bufferArray).')' : $bufferArray[0];
     }
   }
 }

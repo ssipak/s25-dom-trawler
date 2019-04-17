@@ -50,6 +50,7 @@ final class DomTrawlerTest extends TestCase
 <body>
 <div>
     <h1>Example Domain</h1>
+    <h2>Enjoy testing</h2>
     <p>This domain is established to be used for illustrative examples in documents. You may use this
     domain in examples without prior coordination or asking for permission.</p>
     <p><a href="http://www.iana.org/domains/example">More information...</a></p>
@@ -64,6 +65,7 @@ final class DomTrawlerTest extends TestCase
 </html>
 HTML;
 
+  /** @var DomTrawler */
   private $trawler;
 
   /**
@@ -85,15 +87,20 @@ HTML;
   {
     $this->assertTrue(
       $this->trawler->select('.test-css-selectors')->text() === 'Do they work as expected?',
-      "CSS selectors work as expected"
+      "Unexpected behavior of CSS selector"
     );
   }
 
   public function testAttributeSelector()
   {
+    $selected = $this->trawler->select('li[data-attr="second"]');
     $this->assertTrue(
-      $this->trawler->select('li[data-attr="second"]')->first()->text() === '2',
-      "Attribute selectors work as expected"
+      $selected->count() === 1 && $selected->first()->text() === '2', "Unexpected behavior of attribute selector"
+    );
+    $selected = $this->trawler->select('ul > li:nth-child(2)[data-attr]');
+    $this->assertTrue(
+      $selected->count() === 1 && $selected->first()->text() === '2',
+      "Unexpected behavior of attribute selector"
     );
   }
 }
