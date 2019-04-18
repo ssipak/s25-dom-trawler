@@ -44,6 +44,10 @@ namespace S25\DomTrawler
 
     // region Transforming methods
 
+    /**
+     * @param $index - zero-based index of node
+     * @return DomTrawler
+     */
     public function item($index): self // ?self
     {
       return $this->createSub(array_filter([$this->node($index)]), true);
@@ -108,7 +112,7 @@ namespace S25\DomTrawler
       $query = $selectorToQueryMap[$selector] ?? null;
       if ($query === null)
       {
-        $query = XPath::selectorToQuery($selector);
+        $query = XPath::fromSelector($selector);
         $selectorToQueryMap[$selector] = $query;
       }
 
@@ -141,28 +145,25 @@ namespace S25\DomTrawler
 
     public function evaluate(string $expression)
     {
-      $dataArray = [];
-      $returnTrawler = false;
-
-      foreach ($this->nodeList as $node)
+      if ($this->single)
       {
-        $data = $this->xpath->evaluate($expression, $node);
-
-        if ($data instanceof \DOMNodeList)
-        {
-          $returnTrawler = true;
-          $dataArray[] = iterator_to_array($data);
-        } else
-        {
-          $dataArray[] = $data;
-        }
+        return empty($this->nodeList)
+          ? null
+          : $this->xpath->evaluate($expression, $this->nodeList[0]);
       }
 
-      return $returnTrawler
-        ? new self($this->xpath, array_reduce($dataArray, 'array_merge', []))
-        : ($this->single ? $dataArray[0] : $dataArray);
+      $dataArray = [];
+      foreach ($this->nodeList as $node)
+      {
+        $dataArray[] = $this->xpath->evaluate($expression, $node);
+      }
+      return $dataArray;
     }
 
+    /**
+     * @param $index - zero-based index of node
+     * @return \DOMNode
+     */
     public function node($index): \DOMNode // ?\DOMNode
     {
       return $this->nodeList[$index] ?? null;

@@ -60,6 +60,7 @@ final class DomTrawlerTest extends TestCase
         <li data-attr="second">2</li>
         <li data-attr="third">3</li>    
     </ul>
+    <div>Nested div</div>
 </div>
 </body>
 </html>
@@ -85,8 +86,9 @@ HTML;
 
   public function testClassSelector()
   {
-    $this->assertTrue(
-      $this->trawler->select('.test-css-selectors')->text() === 'Do they work as expected?',
+    $this->assertEquals(
+      $this->trawler->select('.test-css-selectors')->text(),
+      'Do they work as expected?',
       "Unexpected behavior of CSS selector"
     );
   }
@@ -102,5 +104,33 @@ HTML;
       $selected->count() === 1 && $selected->first()->text() === '2',
       "Unexpected behavior of attribute selector"
     );
+  }
+
+  public function testEvaluate()
+  {
+    $this->assertEquals(
+      $this->trawler->select('li')->evaluate('string(text())'),
+      ['1', '2', '3'],
+      "Unexpected behavior of evaluate function"
+    );
+
+    $this->assertEquals(
+      $this->trawler->select('li[data-attr]')->evaluate('string(@data-attr)'),
+      ['second', 'third'],
+      "Unexpected behavior of evaluate function"
+    );
+
+    $this->assertEquals(
+      $this->trawler->select('li[data-attr]')->item(1)->evaluate('string(@data-attr)'),
+      'third',
+      "Unexpected behavior of evaluate function"
+    );
+  }
+
+  public function testContextCombinator()
+  {
+    $body = $this->trawler->select('body');
+    $this->assertTrue($body->select('div')->count() === 2, "Unexpected behavior of tag selector");
+    $this->assertTrue($body->select('> div')->count() === 1, "Unexpected behavior of context combinator");
   }
 }

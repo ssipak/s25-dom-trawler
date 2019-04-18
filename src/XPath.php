@@ -19,13 +19,12 @@ namespace S25\DomTrawler
      * @return string
      * @throws \Exception
      */
-    public static function selectorToQuery(string $selector): string
+    public static function fromSelector(string $selector): string
     {
       // Удаляем начальные и концевые пробелы
       $selector = preg_replace('/^\s+|\s+$/u', '', $selector);
 
-      $alters = [];
-      $query = [];
+      $query = new XPathQuery();
 
       while ($selector)
       {
@@ -40,7 +39,7 @@ namespace S25\DomTrawler
           ||
           self::parsePseudoClass($selector, $query)
           ||
-          self::parseComma($selector, $query, $alters)
+          self::parseComma($selector, $query)
           ||
           self::parseAdjacentSibling($selector, $query)
           ||
@@ -56,18 +55,13 @@ namespace S25\DomTrawler
 
         throw new \Exception(sprintf("Unsupported selector: «%s»", mb_substr($selector, 0, 30, 'utf-8')));
       }
-      $alters[] = $query;
 
-      $query = implode('|', array_map(function ($query) {
-        return 'descendant-or-self::*/' . implode('/', $query);
-      }, $alters));
-
-      return $query;
+      return $query->toString();
     }
 
     // region Parsers
 
-    private static function parseTag(string &$selector, array &$query): bool
+    private static function parseTag(string &$selector, XPathQuery $query): bool
     {
       // tag HTML тэг
       if (preg_match('/^([*]|[\w-]+)/ui', $selector, $match) !== 1)
@@ -75,12 +69,12 @@ namespace S25\DomTrawler
         return false;
       }
 
-      $query[] = "self::{$match[0]}";
+      $query->addSelector("self::{$match[0]}");
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseId(string &$selector, array &$query): bool
+    private static function parseId(string &$selector, XPathQuery $query): bool
     {
       // #id HTML идентификатор
       if (preg_match('/^#([\w-]+)/ui', $selector, $match) !== 1)
@@ -88,13 +82,12 @@ namespace S25\DomTrawler
         return false;
       }
 
-      $id = $match[1];
-      $query[] = "self::*[@id='{$id}']";
+      $query->addSelector("self::*[@id='{$match[1]}']");
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseClass(string &$selector, array &$query): bool
+    private static function parseClass(string &$selector, XPathQuery $query): bool
     {
       // .css-class CSS класс
       if (preg_match('/^\.([\w-]+)/ui', $selector, $match) !== 1)
@@ -102,13 +95,18 @@ namespace S25\DomTrawler
         return false;
       }
 
-      $class = $match[1];
-      $query[] = "self::*[contains(concat(' ', normalize-space(@class), ' '), ' {$class} ')]";
+      $query->addSelector("self::*[contains(concat(' ', normalize-space(@class), ' '), ' {$match[1]} ')]");
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseAttribute(string &$selector, array &$query): bool
+    /**
+     * @param string $selector
+     * @param XPathQuery $query
+     * @return bool
+     * @throws \Exception
+     */
+    private static function parseAttribute(string &$selector, XPathQuery $query): bool
     {
       /**
        * [attr]        Represents an element with an attribute name of attr.
@@ -162,28 +160,34 @@ PCRE;
 
       if (is_string($value))
       {
-        $value = self::escapeString($value);
+        $value = self::escape($value);
       }
 
-      $component = 'self::*';
+      $expr = 'self::*';
 
       switch ($operator)
       {
-        case 'none':  $component .= "[$name]"; break;
-        case '=':     $component .= "[$name=$value]"; break;
-        case '^=':    $component .= "[starts-with($name, $value)]";break;
-        case '$=':    $component .= "[substring($name, string-length($name) - string-length($value) + 1) = $value]"; break;
-        case '*=':    $component .= "[contains($name, $value)]"; break;
+        case 'none':  $expr .= "[$name]"; break;
+        case '=':     $expr .= "[$name=$value]"; break;
+        case '^=':    $expr .= "[starts-with($name, $value)]";break;
+        case '$=':    $expr .= "[substring($name, string-length($name) - string-length($value) + 1) = $value]"; break;
+        case '*=':    $expr .= "[contains($name, $value)]"; break;
         default:
           throw new \Exception(sprintf("Unsupported attribute operator: «%s»", mb_substr($selector, 0, 30, 'utf-8')));
       }
 
-      $query[] = $component;
+      $query->addSelector($expr);
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parsePseudoClass(string &$selector, array &$query): bool
+    /**
+     * @param string $selector
+     * @param XPathQuery $query
+     * @return bool
+     * @throws \Exception
+     */
+    private static function parsePseudoClass(string &$selector, XPathQuery $query): bool
     {
       if (preg_match('/^:([\w-]+)/', $selector, $match) !== 1)
       {
@@ -202,7 +206,7 @@ PCRE;
       throw new \Exception(sprintf("Unsupported pseudo-class: «%s»", mb_substr($selector, 0, 30, 'utf-8')));
     }
 
-    private static function parseFirstLastOnly(string &$selector, array &$query)
+    private static function parseFirstLastOnly(string &$selector, XPathQuery $query)
     {
       // Первый, последний или единственный "отпрыск"
       if (preg_match('/^:(first|last|only)-(child|of-type)/ui', $selector, $match) !== 1)
@@ -221,12 +225,12 @@ PCRE;
       $first  = $first ? "[not($first)]" : '';
       $last   = $last  ? "[not($last)]"  : '';
 
-      $query[] = "self::*$first$last";
+      $query->addSelector("self::*$first$last");
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseNthChild(string &$selector, array &$query)
+    private static function parseNthChild(string &$selector, XPathQuery $query)
     {
       $pcre = <<<PCRE
 /^ (?J)
@@ -260,61 +264,64 @@ PCRE;
           break;
       }
 
-        $axis = ($match['side'] ?? '') !== '-last' ? 'preceding-sibling' : 'following-sibling';
+      $axis = ($match['side'] ?? '') !== '-last' ? 'preceding-sibling' : 'following-sibling';
 
       if ($match['mode'] === 'of-type')
       {
-        $query[] = sprintf("self::*[php:function('%s::nthOfType', self::*, $axis::*, $a, $b)]", self::class);
+        $query->addSelector(sprintf("self::*[php:function('%s::nthOfType', self::*, $axis::*, $a, $b)]", self::class));
         return true;
       }
 
       if ($a === 0)
       {
         $b = strval($b - 1);
-        $query[] = "self::*[count($axis::*) = $b]";
+        $query->addSelector("self::*[count($axis::*) = $b]");
         return true;
       }
 
-      // (x-c) / n >= 0 and (x-c) % n == 0
+      // a * n + b > 0 where n = 1, 2, 3...
 
-      //    (x-c) % n == 0
+      // (a-b) / n >= 0 and (a-b) % n == 0
+
+      //    (a-b) % n == 0
       //  and
-      //      n > 0 and x >= c
+      //      x >= b if a > 0
       //    or
-      //      n < 0 and x <= c
+      //      x <= b if a < 0
 
       if ($b === 0)
       {
-        $query[] = $a < 0
-          ? 'self::*[false()]' // Селектор -Xn+0, где X = 1,2.. не выбирает ничего;
-          : "self::*[(count($axis::*)+1) mod $a = 0]";
+        $query->addSelector(
+          $a < 0
+            ? 'self::*[false()]' // Селектор -Xa + 0, где X = 1, 2.. не выбирает ничего;
+            : "self::*[(count($axis::*)+1) mod $a = 0]"
+        );
         return true;
       }
 
       $minusC = -$b + 1;
       $minusC = strval($minusC > 0 ? '+' . $minusC : ($minusC === 0 ? '' : $minusC));
 
-      $component = "self::*[(count($axis::*){$minusC}) mod $a = 0]";
-      $component .= $a > 0 ? "[(count($axis::*){$minusC}) >= 0]" : "[(count($axis::*){$minusC}) <= 0]";
-
-      $query[] = $component;
+      $query->addSelector(join([
+        "self::*[(count($axis::*){$minusC}) mod $a = 0]",
+        $a > 0 ? "[(count($axis::*){$minusC}) >= 0]" : "[(count($axis::*){$minusC}) <= 0]"
+      ]));
       return true;
     }
 
-    private static function parseComma(string &$selector, array &$query, array &$alters): bool
+    private static function parseComma(string &$selector, XPathQuery $query): bool
     {
       // * , * Или
       if (preg_match('/^\s*[,]\s*/ui', $selector, $match) !== 1)
       {
         return false;
       }
-      $alters[] = $query;
-      $query = [];
+      $query->nextList();
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseAdjacentSibling(string &$selector, array &$query): bool
+    private static function parseAdjacentSibling(string &$selector, XPathQuery $query): bool
     {
       // * + * Первый следующий элемент
       if (preg_match('/^\s*[+]\s*/ui', $selector, $match) !== 1)
@@ -322,12 +329,12 @@ PCRE;
         return false;
       }
 
-      $query[] = 'following-sibling::*[1]';
+      $query->addCombinator('following-sibling::*[1]');
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseGeneralSibling(string &$selector, array &$query): bool
+    private static function parseGeneralSibling(string &$selector, XPathQuery $query): bool
     {
       // * ~ * Поледующие элементы с общим родителем
       if (preg_match('/^\s*[~]\s*/ui', $selector, $match) !== 1)
@@ -335,31 +342,31 @@ PCRE;
         return false;
       }
 
-      $query[] = 'following-sibling::*';
+      $query->addCombinator('following-sibling::*');
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseChild(string &$selector, array &$query): bool
+    private static function parseChild(string &$selector, XPathQuery $query): bool
     {
       // * > * Дочерние элементы
       if (preg_match('/^\s*[>]\s*/ui', $selector, $match) !== 1)
       {
         return false;
       }
-      $query[] = 'child::*';
+      $query->addCombinator('child::*');
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
 
-    private static function parseDescendant(string &$selector, array &$query): bool
+    private static function parseDescendant(string &$selector, XPathQuery $query): bool
     {
       // * * или * >> * Потомоки
-      if (preg_match('/^(\s+|\s*[>][>]\s*)/ui', $selector, $match) !== 1)
+      if (preg_match('/^(\s*[>][>]\s*|\s+)/ui', $selector, $match) !== 1)
       {
         return false;
       }
-      $query[] = 'descendant-or-self::*';
+      $query->addCombinator('descendant-or-self::*');
       $selector = self::cutOff($selector, $match[0]);
       return true;
     }
@@ -417,17 +424,17 @@ PCRE;
     /**
      * @param \DOMNode[] $contextNodes
      * @param \DOMNode[] $nodes
-     * @param mixed $n
-     * @param mixed $c
+     * @param mixed $a
+     * @param mixed $b
      * @return bool
      */
-    public static function funcNthOfType(array $contextNodes, array $nodes, $n, $c): bool
+    public static function funcNthOfType(array $contextNodes, array $nodes, $a, $b): bool
     {
-      $index = self::sameLocalNameCount($contextNodes, $nodes) + 1;
-      $n = intval($n);
-      $c = intval($c);
-      $diff = $index - $c;
-      return $diff / $n >= 0 && $diff % $n === 0;
+      $index = self::funcSameLocalNameCount($contextNodes, $nodes) + 1;
+      $a = intval($a);
+      $b = intval($b);
+      $diff = $index - $b;
+      return $diff / $a >= 0 && $diff % $a === 0;
     }
 
     // endregion Registered functions
@@ -471,7 +478,7 @@ PCRE;
      * @param $string
      * @return string
      */
-    private static function escapeString(string $string): string
+    public static function escape(string $string): string
     {
       $pieces = preg_split('/([\'"])/u', $string, -1, PREG_SPLIT_DELIM_CAPTURE|PREG_SPLIT_NO_EMPTY);
 

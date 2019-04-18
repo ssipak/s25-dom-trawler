@@ -10,7 +10,9 @@
         }
     ],
     "require": {
-        "php": "^7.0"
+        "php": "^7.0",
+        "ext-dom": "*",
+        "ext-mbstring": "*"
     },
     "require-dev": {
         "phpunit/phpunit": "^6"
@@ -19,6 +21,8 @@
         "psr-4": {"S25\\DomTrawler\\": "src/"}
     },
     "scripts": {
-        "test": "./vendor/bin/phpunit --bootstrap vendor/autoload.php test/DomTrawlerTest.php"
+        "test": "./vendor/bin/phpunit --bootstrap vendor/autoload.php test/DomTrawlerTest.php",
+        "debug": "./vendor/bin/phpunit --bootstrap vendor/autoload.php test/DomTrawlerTest.php --debug",
+        "xdebug": "php -d xdebug.remote_autostart=1 ./vendor/bin/phpunit --bootstrap vendor/autoload.php test/DomTrawlerTest.php --debug"
     }
 }
