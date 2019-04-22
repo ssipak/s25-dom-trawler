@@ -48,12 +48,12 @@ namespace S25\DomTrawler
      * @param $index - zero-based index of node
      * @return DomTrawler
      */
-    public function item($index): self // ?self
+    public function item($index): self
     {
       return $this->createSub(array_filter([$this->node($index)]), true);
     }
 
-    public function first(): self // ?self
+    public function first(): self
     {
       return $this->item(0);
     }
@@ -63,7 +63,7 @@ namespace S25\DomTrawler
       $unique = [];
       foreach ($this->nodeList as $node)
       {
-        $unique[spl_object_id($node)] = $node;
+        $unique[spl_object_hash($node)] = $node;
       }
       return $this->createSub(array_values($unique), $this->single);
     }
@@ -162,9 +162,9 @@ namespace S25\DomTrawler
 
     /**
      * @param $index - zero-based index of node
-     * @return \DOMNode
+     * @return \DOMNode|null
      */
-    public function node($index): \DOMNode // ?\DOMNode
+    public function node($index) // ?\DOMNode
     {
       return $this->nodeList[$index] ?? null;
     }

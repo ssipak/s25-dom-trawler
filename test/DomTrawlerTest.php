@@ -80,8 +80,12 @@ HTML;
   public function test()
   {
     $a = $this->trawler->select('body > div, p')->select('a');
-    $this->assertTrue($a->count() > 1, "Same node can be selected differently (e.g. {$a->count()})");
+    $this->assertTrue($a->count() === 2, "Same node can be selected differently (e.g. {$a->count()})");
     $this->assertTrue($a->unique()->count() === 1, "«unique» method can be used to drop duplicates");
+    $this->assertTrue(
+      $this->trawler->select("h2 > span")->node(0) === null,
+      "Selector does not match anything, but something was found"
+    );
   }
 
   public function testClassSelector()
@@ -121,7 +125,7 @@ HTML;
     );
 
     $this->assertEquals(
-      $this->trawler->select('li[data-attr]')->item(1)->evaluate('string(@data-attr)'),
+      $this->trawler->select('li[data-attr]')[1]->evaluate('string(@data-attr)'),
       'third',
       "Unexpected behavior of evaluate function"
     );
