@@ -115,19 +115,19 @@ HTML;
     $this->assertEquals(
       $this->trawler->select('li')->evaluate('string(text())'),
       ['1', '2', '3'],
-      "Unexpected behavior of evaluate function"
+      "Unexpected behavior of evaluate method"
     );
 
     $this->assertEquals(
       $this->trawler->select('li[data-attr]')->evaluate('string(@data-attr)'),
       ['second', 'third'],
-      "Unexpected behavior of evaluate function"
+      "Unexpected behavior of evaluate method"
     );
 
     $this->assertEquals(
       $this->trawler->select('li[data-attr]')[1]->evaluate('string(@data-attr)'),
       'third',
-      "Unexpected behavior of evaluate function"
+      "Unexpected behavior of evaluate method"
     );
   }
 
@@ -151,5 +151,36 @@ HTML;
     $body = $this->trawler->select('body');
     $this->assertTrue($body->select('div')->count() === 2, "Unexpected behavior of tag selector");
     $this->assertTrue($body->select('> div')->count() === 1, "Unexpected behavior of context combinator");
+  }
+
+  public function testIteratorAndSingleMode()
+  {
+    $lis = $this->trawler->select('li');
+    $this->assertTrue(
+      $lis instanceof DomTrawler,
+      sprintf("Select method didn't return %s instance", DomTrawler::class)
+    );
+    $this->assertTrue(
+      $this->getPropertyValue($lis, 'single') === false,
+      sprintf("Select method didn't return multiple %s instance", DomTrawler::class)
+    );
+    foreach ($lis as $li)
+    {
+      $this->assertTrue(
+        $this->getPropertyValue($li, 'single') === true,
+        sprintf("Select method didn't return multiple %s instance", DomTrawler::class)
+      );
+      break;
+    }
+  }
+
+  public function getPropertyValue(&$object, $property)
+  {
+    $reflection = new \ReflectionClass(get_class($object));
+
+    $property = $reflection->getProperty($property);
+    $property->setAccessible(true);
+
+    return $property->getValue($object);
   }
 }

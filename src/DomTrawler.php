@@ -202,7 +202,7 @@ namespace S25\DomTrawler
     {
       foreach ($this->nodeList as $node)
       {
-        yield new self($this->xpath, [$node]);
+        yield $this->createSub([$node], true);
       }
     }
 
