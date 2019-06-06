@@ -131,6 +131,21 @@ HTML;
     );
   }
 
+  public function testAttr()
+  {
+    $this->assertEquals(
+      $this->trawler->select('li[data-attr]')->attr('data-attr'),
+      ['second', 'third'],
+      "Unexpected behavior of attr function"
+    );
+
+    $this->assertEquals(
+      $this->trawler->select('li[data-attr]')[1]->attr('data-attr'),
+      'third',
+      "Unexpected behavior of attr function"
+    );
+  }
+
   public function testContextCombinator()
   {
     $body = $this->trawler->select('body');

@@ -145,19 +145,16 @@ namespace S25\DomTrawler
 
     public function evaluate(string $expression)
     {
-      if ($this->single)
-      {
-        return empty($this->nodeList)
-          ? null
-          : $this->xpath->evaluate($expression, $this->nodeList[0]);
-      }
+      return $this->mapNodes(function (\DOMNode $node) use ($expression) {
+        return $this->xpath->evaluate($expression, $node);
+      });
+    }
 
-      $dataArray = [];
-      foreach ($this->nodeList as $node)
-      {
-        $dataArray[] = $this->xpath->evaluate($expression, $node);
-      }
-      return $dataArray;
+    public function attr(string $name)
+    {
+      return $this->mapNodes(function(\DOMNode $node) use ($name) {
+        return $node->attributes->getNamedItem($name)->nodeValue;
+      });
     }
 
     /**
@@ -175,6 +172,23 @@ namespace S25\DomTrawler
     public function getNodes(): array
     {
       return $this->nodeList;
+    }
+
+    private function mapNodes(callable $func)
+    {
+      if ($this->single)
+      {
+        return empty($this->nodeList)
+          ? null
+          : $func($this->nodeList[0]);
+      }
+
+      $dataArray = [];
+      foreach ($this->nodeList as $node)
+      {
+        $dataArray[] = $func($node);
+      }
+      return $dataArray;
     }
 
     // endregion
