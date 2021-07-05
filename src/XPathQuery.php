@@ -4,10 +4,12 @@ namespace S25\DomTrawler
 {
   class XPathQuery
   {
-    private $alters = [];
-    private $query = [];
+    /** @var string[] */
+    private array $alters = [];
+    /** @var string[] */
+    private array $query = [];
 
-    public function addSelector(string $expression)
+    public function addSelector(string $expression): void
     {
       if (empty($this->query))
       {
@@ -16,12 +18,12 @@ namespace S25\DomTrawler
       $this->query[] = $expression;
     }
 
-    public function addCombinator(string $expression)
+    public function addCombinator(string $expression): void
     {
       $this->query[] = $expression;
     }
 
-    public function nextList()
+    public function nextList(): void
     {
       $this->alters[] = $this->query;
       $this->query = [];

@@ -1,45 +1,47 @@
 <?php
 
-namespace S25\DomTrawler
+namespace S25\DomTrawler;
+
+use JetBrains\PhpStorm\Pure;
+
+class DomTrawler implements \IteratorAggregate, \ArrayAccess, \Countable
 {
-  class DomTrawler implements \IteratorAggregate, \ArrayAccess, \Countable
-  {
     /** @var \DOMNode[] */
-    protected $nodeList;
-    /** @var \DOMXPath */
-    protected $xpath;
+    protected array $nodeList;
+
+    protected \DOMXPath $xpath;
     /** @var bool - флаг, указывающий, что в наборе только один элемент, влияет на результат функции evaluate */
-    protected $single;
+    protected bool $single;
 
     private function __construct(\DOMXPath $xpath, array $nodeList, bool $single = false)
     {
-      $this->xpath = $xpath;
-      $this->nodeList = array_values($nodeList);
-      $this->single = $single;
+        $this->xpath = $xpath;
+        $this->nodeList = array_values($nodeList);
+        $this->single = $single;
     }
 
     public static function fromDocument(\DOMDocument $document): self
     {
-      $nodeList = [$document];
-      $xpath = new \DOMXpath($document);
-      XPath::setUp($xpath);
-      return new self($xpath, $nodeList, true);
+        $nodeList = [$document];
+        $xpath = new \DOMXpath($document);
+        XPath::setUp($xpath);
+        return new self($xpath, $nodeList, true);
     }
 
     public static function fromHtml($html): self
     {
-      $document = new \DOMDocument();
-      $lastErrors = libxml_use_internal_errors(true);
-      $document->loadHtml($html);
-      libxml_clear_errors();
-      libxml_use_internal_errors($lastErrors);
+        $document = new \DOMDocument();
+        $lastErrors = libxml_use_internal_errors(true);
+        $document->loadHtml($html);
+        libxml_clear_errors();
+        libxml_use_internal_errors($lastErrors);
 
-      return self::fromDocument($document);
+        return self::fromDocument($document);
     }
 
-    private function createSub(array $nodeList, bool $single = false): self
+    #[Pure] private function createSub(array $nodeList, bool $single = false): self
     {
-      return new self($this->xpath, $nodeList, $single);
+        return new self($this->xpath, $nodeList, $single);
     }
 
     // region Transforming methods
@@ -50,54 +52,50 @@ namespace S25\DomTrawler
      */
     public function item($index): self
     {
-      return $this->createSub(array_filter([$this->node($index)]), true);
+        return $this->createSub(array_filter([$this->node($index)]), true);
     }
 
     public function first(): self
     {
-      return $this->item(0);
+        return $this->item(0);
     }
 
-    public function unique(): self
+    #[Pure] public function unique(): self
     {
-      $unique = [];
-      foreach ($this->nodeList as $node)
-      {
-        $unique[spl_object_hash($node)] = $node;
-      }
-      return $this->createSub(array_values($unique), $this->single);
+        $unique = [];
+        foreach ($this->nodeList as $node) {
+            $unique[spl_object_hash($node)] = $node;
+        }
+        return $this->createSub(array_values($unique), $this->single);
     }
 
     public function children(): self
     {
-      $childNodes = [];
-      foreach ($this->nodeList as $node)
-      {
-        $childNodes[] = iterator_to_array($node->childNodes);
-      }
+        $childNodes = [];
+        foreach ($this->nodeList as $node) {
+            $childNodes[] = iterator_to_array($node->childNodes);
+        }
 
-      return $this->createSub(array_reduce($childNodes, 'array_merge', []));
+        return $this->createSub(array_reduce($childNodes, 'array_merge', []));
     }
 
-    public function parent(): self
+    #[Pure] public function parent(): self
     {
-      $parents = [];
-      foreach ($this->nodeList as $node)
-      {
-        $parents[] = $node->parentNode;
-      }
+        $parents = [];
+        foreach ($this->nodeList as $node) {
+            $parents[] = $node->parentNode;
+        }
 
-      return $this->createSub($parents, $this->single);
+        return $this->createSub($parents, $this->single);
     }
 
     public function query(string $query): self
     {
-      $nodeListArray = [];
-      foreach ($this->nodeList as $node)
-      {
-        $nodeListArray[] = iterator_to_array($this->xpath->query($query, $node));
-      }
-      return $this->createSub(array_reduce($nodeListArray, 'array_merge', []));
+        $nodeListArray = [];
+        foreach ($this->nodeList as $node) {
+            $nodeListArray[] = iterator_to_array($this->xpath->query($query, $node));
+        }
+        return $this->createSub(array_reduce($nodeListArray, 'array_merge', []));
     }
 
     /**
@@ -107,16 +105,15 @@ namespace S25\DomTrawler
      */
     public function select(string $selector): self
     {
-      static $selectorToQueryMap = [];
+        static $selectorToQueryMap = [];
 
-      $query = $selectorToQueryMap[$selector] ?? null;
-      if ($query === null)
-      {
-        $query = XPath::fromSelector($selector);
-        $selectorToQueryMap[$selector] = $query;
-      }
+        $query = $selectorToQueryMap[$selector] ?? null;
+        if ($query === null) {
+            $query = XPath::fromSelector($selector);
+            $selectorToQueryMap[$selector] = $query;
+        }
 
-      return $this->query($query);
+        return $this->query($query);
     }
 
     // endregion
@@ -125,45 +122,47 @@ namespace S25\DomTrawler
 
     public function html(): string
     {
-      $html = '';
-      foreach ($this->nodeList as $node)
-      {
-        $html .= $node->ownerDocument->saveHTML($node);
-      }
-      return $html;
+        $html = '';
+        foreach ($this->nodeList as $node) {
+            $html .= $node->ownerDocument->saveHTML($node);
+        }
+        return $html;
     }
 
     public function text(): string
     {
-      $text = '';
-      foreach ($this->nodeList as $node)
-      {
-        $text .= $node->nodeValue;
-      }
-      return $text;
+        $text = '';
+        foreach ($this->nodeList as $node) {
+            $text .= $node->nodeValue;
+        }
+        return $text;
     }
 
-    public function evaluate(string $expression)
+    public function evaluate(string $expression): array|string|null
     {
-      return $this->mapNodes(function (\DOMNode $node) use ($expression) {
-        return $this->xpath->evaluate($expression, $node);
-      });
+        return $this->mapNodes(
+            function (\DOMNode $node) use ($expression) {
+                return $this->xpath->evaluate($expression, $node);
+            }
+        );
     }
 
-    public function attr(string $name)
+    public function attr(string $name): array|string|null
     {
-      return $this->mapNodes(function(\DOMNode $node) use ($name) {
-        return $node->attributes->getNamedItem($name)->nodeValue;
-      });
+        return $this->mapNodes(
+            function (\DOMNode $node) use ($name) {
+                return $node->attributes->getNamedItem($name)->nodeValue;
+            }
+        );
     }
 
     /**
      * @param $index - zero-based index of node
      * @return \DOMNode|null
      */
-    public function node($index) // ?\DOMNode
+    public function node($index): ?\DOMNode
     {
-      return $this->nodeList[$index] ?? null;
+        return $this->nodeList[$index] ?? null;
     }
 
     /**
@@ -171,24 +170,22 @@ namespace S25\DomTrawler
      */
     public function getNodes(): array
     {
-      return $this->nodeList;
+        return $this->nodeList;
     }
 
-    private function mapNodes(callable $func)
+    private function mapNodes(callable $func): array|string|null
     {
-      if ($this->single)
-      {
-        return empty($this->nodeList)
-          ? null
-          : $func($this->nodeList[0]);
-      }
+        if ($this->single) {
+            return empty($this->nodeList)
+                ? null
+                : $func($this->nodeList[0]);
+        }
 
-      $dataArray = [];
-      foreach ($this->nodeList as $node)
-      {
-        $dataArray[] = $func($node);
-      }
-      return $dataArray;
+        $dataArray = [];
+        foreach ($this->nodeList as $node) {
+            $dataArray[] = $func($node);
+        }
+        return $dataArray;
     }
 
     // endregion
@@ -196,14 +193,13 @@ namespace S25\DomTrawler
     // region IteratorAggregate implementation
 
     /**
-     * @return \Generator|self[]
+     * @return \Generator<self>
      */
     public function getIterator(): \Generator
     {
-      foreach ($this->nodeList as $node)
-      {
-        yield $this->createSub([$node], true);
-      }
+        foreach ($this->nodeList as $node) {
+            yield $this->createSub([$node], true);
+        }
     }
 
     // endregion
@@ -212,12 +208,12 @@ namespace S25\DomTrawler
 
     public function offsetExists($offset): bool
     {
-      return isset($this->nodeList[$offset]);
+        return isset($this->nodeList[$offset]);
     }
 
-    public function offsetGet($offset): self // ?self
+    public function offsetGet($offset): ?self
     {
-      return $this->item($offset);
+        return $this->item($offset);
     }
 
     /**
@@ -227,7 +223,7 @@ namespace S25\DomTrawler
      */
     public function offsetSet($offset, $value)
     {
-      throw new \Exception("%s items can't be set or unset", self::class);
+        throw new \Exception("%s items can't be set or unset", self::class);
     }
 
     /**
@@ -236,7 +232,7 @@ namespace S25\DomTrawler
      */
     public function offsetUnset($offset)
     {
-      throw new \Exception("%s items can't be set or unset", self::class);
+        throw new \Exception("%s items can't be set or unset", self::class);
     }
 
     // endregion
@@ -245,9 +241,8 @@ namespace S25\DomTrawler
 
     public function count(): int
     {
-      return count($this->nodeList);
+        return count($this->nodeList);
     }
 
     // endregion
-  }
 }

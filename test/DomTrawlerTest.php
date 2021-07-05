@@ -5,8 +5,8 @@ use S25\DomTrawler\DomTrawler;
 
 final class DomTrawlerTest extends TestCase
 {
-  const HTML = /** @lang HTML */
-    <<<HTML
+    const HTML = /** @lang HTML */
+        <<<HTML
 <!doctype html>
 <html>
 <head>
@@ -66,121 +66,120 @@ final class DomTrawlerTest extends TestCase
 </html>
 HTML;
 
-  /** @var DomTrawler */
-  private $trawler;
+    private DomTrawler $trawler;
 
-  /**
-   * DomTrawlerTest constructor.
-   */
-  protected function setUp()
-  {
-    $this->trawler = DomTrawler::fromHtml(self::HTML);
-  }
-
-  public function test()
-  {
-    $a = $this->trawler->select('body > div, p')->select('a');
-    $this->assertTrue($a->count() === 2, "Same node can be selected differently (e.g. {$a->count()})");
-    $this->assertTrue($a->unique()->count() === 1, "«unique» method can be used to drop duplicates");
-    $this->assertTrue(
-      $this->trawler->select("h2 > span")->node(0) === null,
-      "Selector does not match anything, but something was found"
-    );
-  }
-
-  public function testClassSelector()
-  {
-    $this->assertEquals(
-      $this->trawler->select('.test-css-selectors')->text(),
-      'Do they work as expected?',
-      "Unexpected behavior of CSS selector"
-    );
-  }
-
-  public function testAttributeSelector()
-  {
-    $selected = $this->trawler->select('li[data-attr="second"]');
-    $this->assertTrue(
-      $selected->count() === 1 && $selected->first()->text() === '2', "Unexpected behavior of attribute selector"
-    );
-    $selected = $this->trawler->select('ul > li:nth-child(2)[data-attr]');
-    $this->assertTrue(
-      $selected->count() === 1 && $selected->first()->text() === '2',
-      "Unexpected behavior of attribute selector"
-    );
-  }
-
-  public function testEvaluate()
-  {
-    $this->assertEquals(
-      $this->trawler->select('li')->evaluate('string(text())'),
-      ['1', '2', '3'],
-      "Unexpected behavior of evaluate method"
-    );
-
-    $this->assertEquals(
-      $this->trawler->select('li[data-attr]')->evaluate('string(@data-attr)'),
-      ['second', 'third'],
-      "Unexpected behavior of evaluate method"
-    );
-
-    $this->assertEquals(
-      $this->trawler->select('li[data-attr]')[1]->evaluate('string(@data-attr)'),
-      'third',
-      "Unexpected behavior of evaluate method"
-    );
-  }
-
-  public function testAttr()
-  {
-    $this->assertEquals(
-      $this->trawler->select('li[data-attr]')->attr('data-attr'),
-      ['second', 'third'],
-      "Unexpected behavior of attr function"
-    );
-
-    $this->assertEquals(
-      $this->trawler->select('li[data-attr]')[1]->attr('data-attr'),
-      'third',
-      "Unexpected behavior of attr function"
-    );
-  }
-
-  public function testContextCombinator()
-  {
-    $body = $this->trawler->select('body');
-    $this->assertTrue($body->select('div')->count() === 2, "Unexpected behavior of tag selector");
-    $this->assertTrue($body->select('> div')->count() === 1, "Unexpected behavior of context combinator");
-  }
-
-  public function testIteratorAndSingleMode()
-  {
-    $lis = $this->trawler->select('li');
-    $this->assertTrue(
-      $lis instanceof DomTrawler,
-      sprintf("Select method didn't return %s instance", DomTrawler::class)
-    );
-    $this->assertTrue(
-      $this->getPropertyValue($lis, 'single') === false,
-      sprintf("Select method didn't return multiple %s instance", DomTrawler::class)
-    );
-    foreach ($lis as $li)
+    /**
+     * DomTrawlerTest constructor.
+     */
+    protected function setUp(): void
     {
-      $this->assertTrue(
-        $this->getPropertyValue($li, 'single') === true,
-        sprintf("Select method didn't return multiple %s instance", DomTrawler::class)
-      );
-      break;
+        $this->trawler = DomTrawler::fromHtml(self::HTML);
     }
-  }
 
-  public function getPropertyValue(&$object, $property)
-  {
-    $reflection = new \ReflectionClass(get_class($object));
+    public function test()
+    {
+        $a = $this->trawler->select('body > div, p')->select('a');
+        $this->assertTrue($a->count() === 2, "Same node can be selected differently (e.g. {$a->count()})");
+        $this->assertTrue($a->unique()->count() === 1, "«unique» method can be used to drop duplicates");
+        $this->assertTrue(
+            $this->trawler->select("h2 > span")->node(0) === null,
+            "Selector does not match anything, but something was found"
+        );
+    }
 
-    $property = $reflection->getProperty($property);
-    $property->setAccessible(true);
+    public function testClassSelector()
+    {
+        $this->assertEquals(
+            $this->trawler->select('.test-css-selectors')->text(),
+            'Do they work as expected?',
+            "Unexpected behavior of CSS selector"
+        );
+    }
 
-    return $property->getValue($object);
-  }
+    public function testAttributeSelector()
+    {
+        $selected = $this->trawler->select('li[data-attr="second"]');
+        $this->assertTrue(
+            $selected->count() === 1 && $selected->first()->text() === '2',
+            "Unexpected behavior of attribute selector"
+        );
+        $selected = $this->trawler->select('ul > li:nth-child(2)[data-attr]');
+        $this->assertTrue(
+            $selected->count() === 1 && $selected->first()->text() === '2',
+            "Unexpected behavior of attribute selector"
+        );
+    }
+
+    public function testEvaluate()
+    {
+        $this->assertEquals(
+            $this->trawler->select('li')->evaluate('string(text())'),
+            ['1', '2', '3'],
+            "Unexpected behavior of evaluate method"
+        );
+
+        $this->assertEquals(
+            $this->trawler->select('li[data-attr]')->evaluate('string(@data-attr)'),
+            ['second', 'third'],
+            "Unexpected behavior of evaluate method"
+        );
+
+        $this->assertEquals(
+            $this->trawler->select('li[data-attr]')[1]->evaluate('string(@data-attr)'),
+            'third',
+            "Unexpected behavior of evaluate method"
+        );
+    }
+
+    public function testAttr()
+    {
+        $this->assertEquals(
+            $this->trawler->select('li[data-attr]')->attr('data-attr'),
+            ['second', 'third'],
+            "Unexpected behavior of attr function"
+        );
+
+        $this->assertEquals(
+            $this->trawler->select('li[data-attr]')[1]->attr('data-attr'),
+            'third',
+            "Unexpected behavior of attr function"
+        );
+    }
+
+    public function testContextCombinator()
+    {
+        $body = $this->trawler->select('body');
+        $this->assertTrue($body->select('div')->count() === 2, "Unexpected behavior of tag selector");
+        $this->assertTrue($body->select('> div')->count() === 1, "Unexpected behavior of context combinator");
+    }
+
+    public function testIteratorAndSingleMode()
+    {
+        $lis = $this->trawler->select('li');
+        $this->assertTrue(
+            $lis instanceof DomTrawler,
+            sprintf("Select method didn't return %s instance", DomTrawler::class)
+        );
+        $this->assertTrue(
+            $this->getPropertyValue($lis, 'single') === false,
+            sprintf("Select method didn't return multiple %s instance", DomTrawler::class)
+        );
+        foreach ($lis as $li) {
+            $this->assertTrue(
+                $this->getPropertyValue($li, 'single') === true,
+                sprintf("Select method didn't return multiple %s instance", DomTrawler::class)
+            );
+            break;
+        }
+    }
+
+    public function getPropertyValue(&$object, $property)
+    {
+        $reflection = new \ReflectionClass(get_class($object));
+
+        $property = $reflection->getProperty($property);
+        $property->setAccessible(true);
+
+        return $property->getValue($object);
+    }
 }
