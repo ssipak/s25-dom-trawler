@@ -4,7 +4,7 @@ namespace S25\DomTrawler;
 
 use JetBrains\PhpStorm\Pure;
 
-class DomTrawler implements \IteratorAggregate, \ArrayAccess, \Countable
+class DomTrawler implements \IteratorAggregate, \ArrayAccess, \Countable, \Stringable
 {
     /** @var \DOMNode[] */
     protected array $nodeList;
@@ -242,6 +242,15 @@ class DomTrawler implements \IteratorAggregate, \ArrayAccess, \Countable
     public function count(): int
     {
         return count($this->nodeList);
+    }
+
+    // endregion
+
+    // region Stringable implementation
+
+    #[Pure] public function __toString()
+    {
+        return $this->text();
     }
 
     // endregion

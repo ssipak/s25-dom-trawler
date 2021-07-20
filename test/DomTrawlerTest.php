@@ -173,6 +173,13 @@ HTML;
         }
     }
 
+
+    public function testStringable()
+    {
+        $body = $this->trawler->select('body');
+
+        $this->assertTrue($body->text() === (string)$body, "toString method should be an alias for text method");
+    }
     public function getPropertyValue(&$object, $property)
     {
         $reflection = new \ReflectionClass(get_class($object));
