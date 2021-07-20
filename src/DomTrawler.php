@@ -116,6 +116,12 @@ class DomTrawler implements \IteratorAggregate, \ArrayAccess, \Countable, \Strin
         return $this->query($query);
     }
 
+    public function __get(string $name)
+    {
+        // Prepend selector with '> ' if it doesn't already have it or '>>'
+        return $this->select(preg_replace('/^(?!>)/u', '> ', $name));
+    }
+
     // endregion
 
     // region Extracting data methods

@@ -180,6 +180,25 @@ HTML;
 
         $this->assertTrue($body->text() === (string)$body, "toString method should be an alias for text method");
     }
+
+    public function testMagicGetter()
+    {
+        $this->assertTrue(
+            $this->trawler->{'*'} instanceof DomTrawler,
+            sprintf("Magic getter didn't return %s instance", DomTrawler::class)
+        );
+
+        $this->assertTrue(
+            count($this->trawler->li) === 0,
+            "Magic getter should return nothing as it in simplest form must take only children"
+        );
+
+        $this->assertTrue(
+            count($this->trawler->{'>> li'}) > 0,
+            "Magic getter should return some lis as its behavior may be affected by adding >> at the beginning"
+        );
+    }
+
     public function getPropertyValue(&$object, $property)
     {
         $reflection = new \ReflectionClass(get_class($object));

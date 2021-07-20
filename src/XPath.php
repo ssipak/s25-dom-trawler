@@ -360,7 +360,7 @@ PCRE;
         private static function parseChild(string &$selector, XPathQuery $query): bool
         {
             // * > * Дочерние элементы
-            if (preg_match('/^\s*[>]\s*/ui', $selector, $match) !== 1) {
+            if (preg_match('/^\s*[>](?!>)\s*/ui', $selector, $match) !== 1) {
                 return false;
             }
             $query->addCombinator('child::*');
